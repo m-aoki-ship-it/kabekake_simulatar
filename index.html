@@ -1,1 +1,753 @@
+<!DOCTYPE html>
 
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>壁掛けテレビ シミュレーター | Craft-Mind</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+JP:wght@300;400;700&display=swap');
+
+:root {
+–black: #0a0a0a;
+–white: #f5f5f0;
+–accent: #e8b84b;
+–red: #d94f3d;
+–gray: #2a2a2a;
+–light-gray: #444;
+}
+
+- { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+body {
+background: var(–black);
+color: var(–white);
+font-family: ‘Noto Sans JP’, sans-serif;
+height: 100dvh;
+overflow: hidden;
+display: flex;
+flex-direction: column;
+}
+
+/* ── HEADER ── */
+header {
+display: flex;
+align-items: center;
+justify-content: space-between;
+padding: 12px 16px;
+background: rgba(10,10,10,0.95);
+border-bottom: 1px solid #222;
+z-index: 100;
+flex-shrink: 0;
+}
+.logo {
+font-family: ‘Bebas Neue’, sans-serif;
+font-size: 20px;
+letter-spacing: 2px;
+color: var(–accent);
+}
+.logo span { color: var(–white); }
+.header-tag {
+font-size: 10px;
+color: #666;
+letter-spacing: 1px;
+text-transform: uppercase;
+}
+
+/* ── CAMERA VIEW ── */
+#camera-container {
+position: relative;
+flex: 1;
+overflow: hidden;
+background: #111;
+display: flex;
+align-items: center;
+justify-content: center;
+}
+
+#video {
+width: 100%;
+height: 100%;
+object-fit: cover;
+display: block;
+}
+
+/* Wall detection canvas overlay */
+#detect-canvas {
+position: absolute;
+top: 0; left: 0;
+width: 100%; height: 100%;
+pointer-events: none;
+opacity: 0;
+transition: opacity 0.3s;
+}
+#detect-canvas.active { opacity: 1; }
+
+/* TV overlay */
+#tv-overlay {
+position: absolute;
+cursor: grab;
+user-select: none;
+touch-action: none;
+filter: drop-shadow(0 8px 32px rgba(0,0,0,0.7));
+transform-origin: center center;
+display: none;
+}
+#tv-overlay.visible { display: block; }
+#tv-overlay:active { cursor: grabbing; }
+
+#tv-svg {
+width: 100%;
+height: 100%;
+}
+
+/* Resize handle */
+.resize-handle {
+position: absolute;
+bottom: -8px;
+right: -8px;
+width: 28px;
+height: 28px;
+background: var(–accent);
+border-radius: 50%;
+cursor: se-resize;
+display: flex;
+align-items: center;
+justify-content: center;
+touch-action: none;
+z-index: 10;
+}
+.resize-handle svg { width: 14px; height: 14px; fill: var(–black); }
+
+/* Size badge on TV */
+#tv-size-badge {
+position: absolute;
+top: 50%;
+left: 50%;
+transform: translate(-50%, -50%);
+background: rgba(0,0,0,0.6);
+color: var(–accent);
+font-family: ‘Bebas Neue’, sans-serif;
+font-size: clamp(14px, 3vw, 24px);
+padding: 4px 10px;
+border-radius: 4px;
+pointer-events: none;
+white-space: nowrap;
+}
+
+/* START SCREEN */
+#start-screen {
+position: absolute;
+inset: 0;
+display: flex;
+flex-direction: column;
+align-items: center;
+justify-content: center;
+background: linear-gradient(160deg, #0a0a0a 0%, #1a1410 100%);
+z-index: 50;
+gap: 24px;
+padding: 24px;
+}
+.start-icon {
+width: 80px;
+height: 80px;
+background: var(–gray);
+border-radius: 16px;
+display: flex;
+align-items: center;
+justify-content: center;
+border: 2px solid #333;
+}
+.start-icon svg { width: 44px; height: 44px; stroke: var(–accent); fill: none; stroke-width: 1.5; }
+.start-title {
+font-family: ‘Bebas Neue’, sans-serif;
+font-size: 32px;
+letter-spacing: 3px;
+text-align: center;
+line-height: 1.2;
+}
+.start-sub {
+font-size: 13px;
+color: #888;
+text-align: center;
+line-height: 1.8;
+}
+#start-btn {
+background: var(–accent);
+color: var(–black);
+border: none;
+padding: 16px 40px;
+font-family: ‘Bebas Neue’, sans-serif;
+font-size: 20px;
+letter-spacing: 3px;
+border-radius: 4px;
+cursor: pointer;
+transition: transform 0.1s, background 0.2s;
+margin-top: 8px;
+}
+#start-btn:active { transform: scale(0.97); }
+
+/* ── BOTTOM PANEL ── */
+#bottom-panel {
+background: rgba(10,10,10,0.97);
+border-top: 1px solid #222;
+padding: 12px 16px 16px;
+flex-shrink: 0;
+z-index: 100;
+}
+
+.panel-label {
+font-size: 10px;
+color: #555;
+letter-spacing: 2px;
+text-transform: uppercase;
+margin-bottom: 8px;
+}
+
+/* Size selector */
+.size-grid {
+display: grid;
+grid-template-columns: repeat(5, 1fr);
+gap: 6px;
+margin-bottom: 12px;
+}
+.size-btn {
+background: var(–gray);
+border: 1px solid #333;
+color: var(–white);
+padding: 8px 4px;
+border-radius: 6px;
+font-family: ‘Bebas Neue’, sans-serif;
+font-size: 16px;
+cursor: pointer;
+transition: all 0.15s;
+text-align: center;
+}
+.size-btn .inch { display: block; font-size: 12px; color: #888; font-family: ‘Noto Sans JP’, sans-serif; }
+.size-btn.active {
+background: var(–accent);
+border-color: var(–accent);
+color: var(–black);
+}
+.size-btn.active .inch { color: rgba(0,0,0,0.6); }
+
+/* Action row */
+.action-row {
+display: flex;
+gap: 8px;
+}
+.action-btn {
+flex: 1;
+background: var(–gray);
+border: 1px solid #333;
+color: var(–white);
+padding: 10px;
+border-radius: 6px;
+font-size: 12px;
+cursor: pointer;
+display: flex;
+flex-direction: column;
+align-items: center;
+gap: 4px;
+transition: all 0.15s;
+}
+.action-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+.action-btn.active { background: var(–red); border-color: var(–red); }
+.action-btn span { font-size: 10px; }
+
+/* Info overlay */
+#info-box {
+position: absolute;
+top: 12px;
+left: 12px;
+background: rgba(0,0,0,0.75);
+border: 1px solid #333;
+border-radius: 8px;
+padding: 10px 14px;
+font-size: 12px;
+display: none;
+pointer-events: none;
+backdrop-filter: blur(8px);
+}
+#info-box.visible { display: block; }
+#info-box .info-label { color: #888; font-size: 10px; letter-spacing: 1px; }
+#info-box .info-val { color: var(–accent); font-family: ‘Bebas Neue’, sans-serif; font-size: 18px; }
+
+/* Detect hint */
+#detect-hint {
+position: absolute;
+bottom: 12px;
+left: 50%;
+transform: translateX(-50%);
+background: rgba(232,184,75,0.15);
+border: 1px solid var(–accent);
+color: var(–accent);
+padding: 6px 14px;
+border-radius: 20px;
+font-size: 11px;
+pointer-events: none;
+opacity: 0;
+transition: opacity 0.4s;
+white-space: nowrap;
+}
+#detect-hint.show { opacity: 1; }
+
+/* Permission error */
+#perm-error {
+position: absolute;
+inset: 0;
+display: none;
+align-items: center;
+justify-content: center;
+flex-direction: column;
+gap: 12px;
+text-align: center;
+padding: 24px;
+z-index: 60;
+}
+#perm-error.show { display: flex; }
+#perm-error p { color: #888; font-size: 14px; line-height: 1.8; }
+#perm-error strong { color: var(–red); font-size: 16px; }
+</style>
+
+</head>
+<body>
+
+<header>
+  <div class="logo">CRAFT<span>-MIND</span></div>
+  <div class="header-tag">TV Wall Simulator</div>
+</header>
+
+<div id="camera-container">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="detect-canvas"></canvas>
+
+  <!-- TV overlay -->
+
+  <div id="tv-overlay">
+    <svg id="tv-svg" viewBox="0 0 160 100" xmlns="http://www.w3.org/2000/svg">
+      <!-- Frame -->
+      <rect x="0" y="0" width="160" height="95" rx="4" ry="4" fill="#1a1a1a" stroke="#444" stroke-width="1"/>
+      <!-- Screen -->
+      <rect x="4" y="4" width="152" height="83" rx="2" ry="2" fill="#0a0a0a"/>
+      <!-- Screen reflection -->
+      <rect x="4" y="4" width="152" height="20" rx="2" ry="2" fill="rgba(255,255,255,0.04)"/>
+      <!-- Logo dot -->
+      <circle cx="80" cy="91" r="2" fill="#555"/>
+      <!-- Stand hint line -->
+      <line x1="70" y1="95" x2="90" y2="95" stroke="#333" stroke-width="1.5"/>
+      <!-- Screen content sim -->
+      <rect x="12" y="12" width="136" height="67" rx="1" fill="url(#screenGrad)" opacity="0.7"/>
+      <defs>
+        <linearGradient id="screenGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#1a2a3a"/>
+          <stop offset="100%" stop-color="#0a0a14"/>
+        </linearGradient>
+      </defs>
+      <!-- Subtle scanlines -->
+      <line x1="12" y1="30" x2="148" y2="30" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+      <line x1="12" y1="50" x2="148" y2="50" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+      <line x1="12" y1="70" x2="148" y2="70" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+    </svg>
+    <div id="tv-size-badge">55型</div>
+    <div class="resize-handle" id="resize-handle">
+      <svg viewBox="0 0 14 14"><path d="M2 12L12 2M7 12L12 7M12 12V7H7"/></svg>
+    </div>
+  </div>
+
+  <!-- Info box -->
+
+  <div id="info-box">
+    <div class="info-label">SELECTED SIZE</div>
+    <div class="info-val" id="info-size">55型</div>
+    <div class="info-label" style="margin-top:4px">WIDTH × HEIGHT</div>
+    <div class="info-val" id="info-dims">1227 × 708 mm</div>
+  </div>
+
+  <!-- Detect hint -->
+
+  <div id="detect-hint">壁面を検出しています...</div>
+
+  <!-- Start screen -->
+
+  <div id="start-screen">
+    <div class="start-icon">
+      <svg viewBox="0 0 44 44"><rect x="2" y="6" width="40" height="26" rx="3"/><line x1="14" y1="32" x2="22" y2="36"/><line x1="30" y1="32" x2="22" y2="36"/><line x1="10" y1="36" x2="34" y2="36"/></svg>
+    </div>
+    <div class="start-title">壁掛けテレビ<br>シミュレーター</div>
+    <div class="start-sub">カメラを壁に向けて<br>テレビのサイズ感を確認できます<br><br>カメラへのアクセスが必要です</div>
+    <button id="start-btn">カメラを起動する</button>
+  </div>
+
+  <!-- Permission error -->
+
+  <div id="perm-error">
+    <strong>カメラへのアクセスが拒否されました</strong>
+    <p>ブラウザの設定からカメラのアクセスを許可してください</p>
+  </div>
+</div>
+
+<div id="bottom-panel">
+  <div class="panel-label">テレビサイズを選択</div>
+  <div class="size-grid" id="size-grid">
+    <button class="size-btn" data-size="32"><span>32</span><span class="inch">型</span></button>
+    <button class="size-btn" data-size="43"><span>43</span><span class="inch">型</span></button>
+    <button class="size-btn active" data-size="55"><span>55</span><span class="inch">型</span></button>
+    <button class="size-btn" data-size="65"><span>65</span><span class="inch">型</span></button>
+    <button class="size-btn" data-size="75"><span>75</span><span class="inch">型</span></button>
+  </div>
+  <div class="action-row">
+    <button class="action-btn" id="detect-btn">
+      <svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 012-2h2M3 17v2a2 2 0 002 2h2M17 3h2a2 2 0 012 2v2M17 21h2a2 2 0 002-2v-2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>
+      <span>壁面検出</span>
+    </button>
+    <button class="action-btn" id="snap-btn">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="4"/><path d="M5 7h1a2 2 0 002-2 1 1 0 011-1h6a1 1 0 011 1 2 2 0 002 2h1a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9a2 2 0 012-2"/></svg>
+      <span>スクショ</span>
+    </button>
+    <button class="action-btn" id="flip-btn">
+      <svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 00-2 2v14a2 2 0 002 2h3M16 3h3a2 2 0 012 2v14a2 2 0 01-2 2h-3M12 3v18"/></svg>
+      <span>カメラ切替</span>
+    </button>
+  </div>
+</div>
+
+<canvas id="snap-canvas" style="display:none"></canvas>
+
+<script>
+// ── TV SIZE DATA ──
+const TV_SIZES = {
+  32: { w: 730, h: 429 },
+  43: { w: 960, h: 544 },
+  55: { w: 1227, h: 708 },
+  65: { w: 1449, h: 837 },
+  75: { w: 1676, h: 970 },
+};
+
+let currentSize = 55;
+let stream = null;
+let facingMode = 'environment';
+let detectActive = false;
+let detecting = false;
+
+// TV position & size state
+let tvState = {
+  x: 0, y: 0,
+  width: 0, height: 0,
+};
+
+const video = document.getElementById('video');
+const tvOverlay = document.getElementById('tv-overlay');
+const detectCanvas = document.getElementById('detect-canvas');
+const detectCtx = detectCanvas.getContext('2d');
+const startScreen = document.getElementById('start-screen');
+const permError = document.getElementById('perm-error');
+const infoBox = document.getElementById('info-box');
+const detectHint = document.getElementById('detect-hint');
+const infoSize = document.getElementById('info-size');
+const infoDims = document.getElementById('info-dims');
+const tvSizeBadge = document.getElementById('tv-size-badge');
+
+// ── START CAMERA ──
+document.getElementById('start-btn').addEventListener('click', startCamera);
+
+async function startCamera() {
+  try {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: false
+    });
+    video.srcObject = stream;
+    await video.play();
+    startScreen.style.display = 'none';
+    initTV();
+    infoBox.classList.add('visible');
+    updateInfo();
+  } catch (e) {
+    startScreen.style.display = 'none';
+    permError.classList.add('show');
+  }
+}
+
+// ── INIT TV POSITION ──
+function initTV() {
+  const cw = document.getElementById('camera-container').clientWidth;
+  const ch = document.getElementById('camera-container').clientHeight;
+  const tvW = cw * 0.55;
+  const tvH = tvW * (9/16);
+  tvState.width = tvW;
+  tvState.height = tvH;
+  tvState.x = (cw - tvW) / 2;
+  tvState.y = (ch - tvH) / 2;
+  applyTV();
+  tvOverlay.classList.add('visible');
+}
+
+function applyTV() {
+  tvOverlay.style.left = tvState.x + 'px';
+  tvOverlay.style.top = tvState.y + 'px';
+  tvOverlay.style.width = tvState.width + 'px';
+  tvOverlay.style.height = tvState.height + 'px';
+}
+
+// ── SIZE SELECTION ──
+document.getElementById('size-grid').addEventListener('click', e => {
+  const btn = e.target.closest('.size-btn');
+  if (!btn) return;
+  document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentSize = parseInt(btn.dataset.size);
+  updateInfo();
+  // Resize TV maintaining center
+  if (tvOverlay.classList.contains('visible')) {
+    const cx = tvState.x + tvState.width / 2;
+    const cy = tvState.y + tvState.height / 2;
+    const cw = document.getElementById('camera-container').clientWidth;
+    const newW = cw * (0.35 + (currentSize - 32) / (75 - 32) * 0.4);
+    const newH = newW * (9/16);
+    tvState.width = newW;
+    tvState.height = newH;
+    tvState.x = cx - newW / 2;
+    tvState.y = cy - newH / 2;
+    applyTV();
+  }
+});
+
+function updateInfo() {
+  const d = TV_SIZES[currentSize];
+  infoSize.textContent = currentSize + '型';
+  infoDims.textContent = d.w + ' × ' + d.h + ' mm';
+  tvSizeBadge.textContent = currentSize + '型';
+}
+
+// ── DRAG (touch & mouse) ──
+let dragging = false, dragStartX, dragStartY, dragTvX, dragTvY;
+let resizing = false, resizeStartX, resizeStartY, resizeStartW, resizeStartH;
+
+tvOverlay.addEventListener('pointerdown', e => {
+  if (e.target.closest('#resize-handle')) return;
+  dragging = true;
+  dragStartX = e.clientX;
+  dragStartY = e.clientY;
+  dragTvX = tvState.x;
+  dragTvY = tvState.y;
+  tvOverlay.setPointerCapture(e.pointerId);
+  e.preventDefault();
+});
+
+document.getElementById('resize-handle').addEventListener('pointerdown', e => {
+  resizing = true;
+  resizeStartX = e.clientX;
+  resizeStartY = e.clientY;
+  resizeStartW = tvState.width;
+  resizeStartH = tvState.height;
+  e.target.setPointerCapture(e.pointerId);
+  e.stopPropagation();
+  e.preventDefault();
+});
+
+window.addEventListener('pointermove', e => {
+  if (dragging) {
+    tvState.x = dragTvX + (e.clientX - dragStartX);
+    tvState.y = dragTvY + (e.clientY - dragStartY);
+    applyTV();
+  }
+  if (resizing) {
+    const dx = e.clientX - resizeStartX;
+    const newW = Math.max(80, resizeStartW + dx);
+    const newH = newW * (9/16);
+    tvState.width = newW;
+    tvState.height = newH;
+    applyTV();
+  }
+});
+
+window.addEventListener('pointerup', () => { dragging = false; resizing = false; });
+
+// ── WALL DETECTION ──
+document.getElementById('detect-btn').addEventListener('click', () => {
+  detectActive = !detectActive;
+  document.getElementById('detect-btn').classList.toggle('active', detectActive);
+  detectCanvas.classList.toggle('active', detectActive);
+  if (detectActive) {
+    detectHint.classList.add('show');
+    setTimeout(() => detectHint.classList.remove('show'), 2000);
+    runDetection();
+  } else {
+    detecting = false;
+    detectCtx.clearRect(0, 0, detectCanvas.width, detectCanvas.height);
+  }
+});
+
+let offCanvas = document.createElement('canvas');
+let offCtx = offCanvas.getContext('2d');
+
+function runDetection() {
+  if (!detectActive) return;
+  detecting = true;
+
+  const container = document.getElementById('camera-container');
+  const W = container.clientWidth;
+  const H = container.clientHeight;
+
+  detectCanvas.width = W;
+  detectCanvas.height = H;
+  offCanvas.width = W;
+  offCanvas.height = H;
+
+  offCtx.drawImage(video, 0, 0, W, H);
+  const imgData = offCtx.getImageData(0, 0, W, H);
+  const data = imgData.data;
+
+  // Find largest uniform (wall-like) region
+  // Sample grid 20x20, check brightness variance
+  const gridW = 20, gridH = 20;
+  const cellW = W / gridW, cellH = H / gridH;
+  const brightness = [];
+
+  for (let gy = 0; gy < gridH; gy++) {
+    for (let gx = 0; gx < gridW; gx++) {
+      let sum = 0, count = 0;
+      const px = Math.floor(gx * cellW + cellW/2);
+      const py = Math.floor(gy * cellH + cellH/2);
+      const idx = (py * W + px) * 4;
+      const r = data[idx], g = data[idx+1], b = data[idx+2];
+      const br = (r * 0.299 + g * 0.587 + b * 0.114);
+      brightness.push(br);
+    }
+  }
+
+  // Find mean brightness
+  const mean = brightness.reduce((a,b)=>a+b,0)/brightness.length;
+  // Mark "wall" cells: bright + close to mean (uniform)
+  const threshold = 40;
+  const wallMask = brightness.map(b => Math.abs(b - mean) < threshold && b > 60);
+
+  // Draw overlay
+  detectCtx.clearRect(0, 0, W, H);
+
+  // Find bounding box of wall region
+  let minX = gridW, maxX = 0, minY = gridH, maxY = 0;
+  let wallCount = 0;
+  wallMask.forEach((isWall, i) => {
+    if (!isWall) return;
+    wallCount++;
+    const gx = i % gridW;
+    const gy = Math.floor(i / gridW);
+    if (gx < minX) minX = gx;
+    if (gx > maxX) maxX = gx;
+    if (gy < minY) minY = gy;
+    if (gy > maxY) maxY = gy;
+  });
+
+  if (wallCount > 20) {
+    const rx = minX * cellW;
+    const ry = minY * cellH;
+    const rw = (maxX - minX + 1) * cellW;
+    const rh = (maxY - minY + 1) * cellH;
+
+    // Highlight wall area
+    detectCtx.strokeStyle = 'rgba(232,184,75,0.8)';
+    detectCtx.lineWidth = 2;
+    detectCtx.setLineDash([8, 6]);
+    detectCtx.strokeRect(rx + 4, ry + 4, rw - 8, rh - 8);
+    detectCtx.setLineDash([]);
+
+    // Corner marks
+    const corners = [[rx+4,ry+4],[rx+rw-4,ry+4],[rx+4,ry+rh-4],[rx+rw-4,ry+rh-4]];
+    detectCtx.strokeStyle = 'rgba(232,184,75,1)';
+    detectCtx.lineWidth = 3;
+    corners.forEach(([cx,cy]) => {
+      const s = 16;
+      detectCtx.beginPath();
+      const dx = cx < W/2 ? 1 : -1;
+      const dy = cy < H/2 ? 1 : -1;
+      detectCtx.moveTo(cx, cy + dy*s);
+      detectCtx.lineTo(cx, cy);
+      detectCtx.lineTo(cx + dx*s, cy);
+      detectCtx.stroke();
+    });
+
+    // Snap TV to wall region (animate)
+    const tvTargetX = rx + (rw - tvState.width) / 2;
+    const tvTargetY = ry + (rh - tvState.height) / 2;
+    // Only snap if TV is roughly inside wall area
+    const tvCX = tvState.x + tvState.width/2;
+    const tvCY = tvState.y + tvState.height/2;
+    if (tvCX > rx && tvCX < rx+rw && tvCY > ry && tvCY < ry+rh) {
+      // Subtle center snap
+      tvState.x += (tvTargetX - tvState.x) * 0.05;
+      tvState.y += (tvTargetY - tvState.y) * 0.05;
+      applyTV();
+    }
+
+    // Label
+    detectCtx.fillStyle = 'rgba(232,184,75,0.9)';
+    detectCtx.font = '11px Noto Sans JP';
+    detectCtx.fillText('壁面検出', rx + 10, ry + 20);
+  }
+
+  if (detectActive) requestAnimationFrame(runDetection);
+}
+
+// ── CAMERA FLIP ──
+document.getElementById('flip-btn').addEventListener('click', async () => {
+  facingMode = facingMode === 'environment' ? 'user' : 'environment';
+  await startCamera();
+});
+
+// ── SCREENSHOT ──
+document.getElementById('snap-btn').addEventListener('click', () => {
+  const container = document.getElementById('camera-container');
+  const W = container.clientWidth;
+  const H = container.clientHeight;
+  const snapCanvas = document.getElementById('snap-canvas');
+  snapCanvas.width = W;
+  snapCanvas.height = H;
+  const ctx = snapCanvas.getContext('2d');
+
+  // Draw video
+  ctx.drawImage(video, 0, 0, W, H);
+
+  // Draw TV overlay
+  if (tvOverlay.classList.contains('visible')) {
+    const tvImg = new Image();
+    const svgBlob = new Blob([document.getElementById('tv-svg').outerHTML], {type:'image/svg+xml'});
+    const url = URL.createObjectURL(svgBlob);
+    tvImg.onload = () => {
+      ctx.save();
+      ctx.filter = 'drop-shadow(0 8px 24px rgba(0,0,0,0.8))';
+      ctx.drawImage(tvImg, tvState.x, tvState.y, tvState.width, tvState.height);
+      ctx.restore();
+      // Badge
+      ctx.fillStyle = 'rgba(0,0,0,0.65)';
+      const bw = 80, bh = 28;
+      const bx = tvState.x + tvState.width/2 - bw/2;
+      const by = tvState.y + tvState.height/2 - bh/2;
+      ctx.beginPath();
+      ctx.roundRect(bx, by, bw, bh, 4);
+      ctx.fill();
+      ctx.fillStyle = '#e8b84b';
+      ctx.font = 'bold 16px Bebas Neue, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(currentSize + '型', tvState.x + tvState.width/2, tvState.y + tvState.height/2 + 6);
+      ctx.textAlign = 'left';
+      // Watermark
+      ctx.fillStyle = 'rgba(232,184,75,0.7)';
+      ctx.font = '12px Bebas Neue, sans-serif';
+      ctx.fillText('CRAFT-MIND', 12, H - 12);
+      // Download
+      const link = document.createElement('a');
+      link.download = 'tv-simulation.png';
+      link.href = snapCanvas.toDataURL('image/png');
+      link.click();
+      URL.revokeObjectURL(url);
+    };
+    tvImg.src = url;
+  }
+});
+</script>
+
+</body>
+</html>
