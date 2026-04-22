@@ -6,23 +6,27 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>壁掛けテレビ シミュレーター | Craft-Mind</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+JP:wght@300;400;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@300;400;500;700;800&display=swap');
 
 :root {
-–black: #0a0a0a;
-–white: #f5f5f0;
-–accent: #e8b84b;
-–red: #d94f3d;
-–gray: #2a2a2a;
-–light-gray: #444;
+–bg:        #f7f6f4;
+–surface:   #ffffff;
+–navy:      #2c3e50;
+–slate:     #4a6280;
+–accent:    #2c5282;
+–accent-lt: #ebf0f8;
+–muted:     #8a9ab0;
+–border:    #dde3ea;
+–text:      #2c3e50;
 }
 
 - { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
 body {
-background: var(–black);
-color: var(–white);
-font-family: ‘Noto Sans JP’, sans-serif;
+background: var(–bg);
+color: var(–text);
+font-family: ‘M PLUS Rounded 1c’, ‘Hiragino Maru Gothic Pro’, sans-serif;
+font-weight: 300;
 height: 100dvh;
 overflow: hidden;
 display: flex;
@@ -34,24 +38,26 @@ header {
 display: flex;
 align-items: center;
 justify-content: space-between;
-padding: 12px 16px;
-background: rgba(10,10,10,0.95);
-border-bottom: 1px solid #222;
+padding: 14px 20px;
+background: var(–surface);
+border-bottom: 1px solid var(–border);
 z-index: 100;
 flex-shrink: 0;
 }
 .logo {
-font-family: ‘Bebas Neue’, sans-serif;
-font-size: 20px;
-letter-spacing: 2px;
-color: var(–accent);
-}
-.logo span { color: var(–white); }
-.header-tag {
-font-size: 10px;
-color: #666;
-letter-spacing: 1px;
+font-size: 13px;
+font-weight: 500;
+letter-spacing: 4px;
+color: var(–navy);
 text-transform: uppercase;
+}
+.logo span { color: var(–accent); }
+.header-tag {
+font-size: 9px;
+color: var(–muted);
+letter-spacing: 2px;
+text-transform: uppercase;
+font-weight: 300;
 }
 
 /* ── CAMERA VIEW ── */
@@ -59,7 +65,7 @@ text-transform: uppercase;
 position: relative;
 flex: 1;
 overflow: hidden;
-background: #111;
+background: #1a1e24;
 display: flex;
 align-items: center;
 justify-content: center;
@@ -72,7 +78,7 @@ object-fit: cover;
 display: block;
 }
 
-/* Wall detection canvas overlay */
+/* Wall detection canvas */
 #detect-canvas {
 position: absolute;
 top: 0; left: 0;
@@ -89,27 +95,23 @@ position: absolute;
 cursor: grab;
 user-select: none;
 touch-action: none;
-filter: drop-shadow(0 8px 32px rgba(0,0,0,0.7));
+filter: drop-shadow(0 6px 24px rgba(0,0,0,0.6));
 transform-origin: center center;
 display: none;
 }
 #tv-overlay.visible { display: block; }
 #tv-overlay:active { cursor: grabbing; }
-
-#tv-svg {
-width: 100%;
-height: 100%;
-}
+#tv-svg { width: 100%; height: 100%; }
 
 /* Resize handle */
 .resize-handle {
 position: absolute;
-bottom: -8px;
-right: -8px;
-width: 28px;
-height: 28px;
+bottom: -6px;
+right: -6px;
+width: 24px;
+height: 24px;
 background: var(–accent);
-border-radius: 50%;
+border-radius: 2px;
 cursor: se-resize;
 display: flex;
 align-items: center;
@@ -117,25 +119,26 @@ justify-content: center;
 touch-action: none;
 z-index: 10;
 }
-.resize-handle svg { width: 14px; height: 14px; fill: var(–black); }
+.resize-handle svg { width: 12px; height: 12px; fill: #fff; }
 
-/* Size badge on TV */
+/* Size badge */
 #tv-size-badge {
 position: absolute;
 top: 50%;
 left: 50%;
 transform: translate(-50%, -50%);
-background: rgba(0,0,0,0.6);
-color: var(–accent);
-font-family: ‘Bebas Neue’, sans-serif;
-font-size: clamp(14px, 3vw, 24px);
-padding: 4px 10px;
-border-radius: 4px;
+background: rgba(0,0,0,0.5);
+color: #fff;
+font-size: clamp(11px, 2.5vw, 16px);
+font-weight: 300;
+letter-spacing: 2px;
+padding: 3px 10px;
+border-radius: 2px;
 pointer-events: none;
 white-space: nowrap;
 }
 
-/* START SCREEN */
+/* ── START SCREEN ── */
 #start-screen {
 position: absolute;
 inset: 0;
@@ -143,93 +146,115 @@ display: flex;
 flex-direction: column;
 align-items: center;
 justify-content: center;
-background: linear-gradient(160deg, #0a0a0a 0%, #1a1410 100%);
+background: linear-gradient(180deg, #eef2f7 0%, #dce6f0 100%);
 z-index: 50;
-gap: 24px;
-padding: 24px;
+gap: 20px;
+padding: 40px 28px;
+}
+.start-logo {
+font-size: 11px;
+font-weight: 500;
+letter-spacing: 5px;
+color: var(–navy);
+text-transform: uppercase;
+margin-bottom: 4px;
 }
 .start-icon {
-width: 80px;
-height: 80px;
-background: var(–gray);
-border-radius: 16px;
+width: 120px;
+height: 100px;
 display: flex;
 align-items: center;
 justify-content: center;
-border: 2px solid #333;
 }
-.start-icon svg { width: 44px; height: 44px; stroke: var(–accent); fill: none; stroke-width: 1.5; }
+.start-icon svg { width: 120px; height: 100px; }
 .start-title {
-font-family: ‘Bebas Neue’, sans-serif;
-font-size: 32px;
-letter-spacing: 3px;
+font-size: 28px;
+font-weight: 700;
+letter-spacing: 2px;
 text-align: center;
-line-height: 1.2;
+line-height: 1.5;
+color: var(–navy);
+margin-top: 4px;
 }
 .start-sub {
 font-size: 13px;
-color: #888;
+font-weight: 400;
+color: var(–slate);
 text-align: center;
-line-height: 1.8;
+line-height: 2;
+letter-spacing: 0.5px;
 }
 #start-btn {
-background: var(–accent);
-color: var(–black);
+background: #29abe2;
+color: #fff;
 border: none;
-padding: 16px 40px;
-font-family: ‘Bebas Neue’, sans-serif;
-font-size: 20px;
-letter-spacing: 3px;
-border-radius: 4px;
+padding: 16px 0;
+width: 100%;
+max-width: 280px;
+font-family: inherit;
+font-size: 15px;
+font-weight: 600;
+letter-spacing: 2px;
+border-radius: 8px;
 cursor: pointer;
-transition: transform 0.1s, background 0.2s;
+transition: opacity 0.2s, transform 0.1s;
 margin-top: 8px;
+box-shadow: 0 4px 18px rgba(41, 171, 226, 0.35), 0 1px 4px rgba(41,171,226,0.2);
 }
-#start-btn:active { transform: scale(0.97); }
+#start-btn:active { opacity: 0.88; transform: scale(0.98); }
 
 /* ── BOTTOM PANEL ── */
 #bottom-panel {
-background: rgba(10,10,10,0.97);
-border-top: 1px solid #222;
-padding: 12px 16px 16px;
+background: var(–surface);
+border-top: 1px solid var(–border);
+padding: 16px 20px 20px;
 flex-shrink: 0;
 z-index: 100;
 }
 
 .panel-label {
-font-size: 10px;
-color: #555;
-letter-spacing: 2px;
+font-size: 9px;
+font-weight: 400;
+color: var(–muted);
+letter-spacing: 3px;
 text-transform: uppercase;
-margin-bottom: 8px;
+margin-bottom: 12px;
 }
 
 /* Size selector */
 .size-grid {
 display: grid;
-grid-template-columns: repeat(5, 1fr);
-gap: 6px;
-margin-bottom: 12px;
+grid-template-columns: repeat(7, 1fr);
+gap: 5px;
+margin-bottom: 14px;
 }
 .size-btn {
-background: var(–gray);
-border: 1px solid #333;
-color: var(–white);
-padding: 8px 4px;
-border-radius: 6px;
-font-family: ‘Bebas Neue’, sans-serif;
-font-size: 16px;
+background: var(–surface);
+border: 1px solid var(–border);
+color: var(–slate);
+padding: 8px 2px;
+border-radius: 2px;
+font-family: inherit;
+font-size: 13px;
+font-weight: 300;
 cursor: pointer;
 transition: all 0.15s;
 text-align: center;
 }
-.size-btn .inch { display: block; font-size: 12px; color: #888; font-family: ‘Noto Sans JP’, sans-serif; }
-.size-btn.active {
-background: var(–accent);
-border-color: var(–accent);
-color: var(–black);
+.size-btn .inch {
+display: block;
+font-size: 10px;
+font-weight: 300;
+color: var(–muted);
+letter-spacing: 1px;
+margin-top: 1px;
 }
-.size-btn.active .inch { color: rgba(0,0,0,0.6); }
+.size-btn.active {
+background: var(–surface);
+border-color: var(–accent);
+color: var(–accent);
+}
+.size-btn.active .inch { color: var(–accent); opacity: 0.7; }
 
 /* Action row */
 .action-row {
@@ -238,53 +263,74 @@ gap: 8px;
 }
 .action-btn {
 flex: 1;
-background: var(–gray);
-border: 1px solid #333;
-color: var(–white);
-padding: 10px;
-border-radius: 6px;
-font-size: 12px;
+background: var(–surface);
+border: 1px solid var(–border);
+color: var(–slate);
+padding: 12px 8px;
+border-radius: 2px;
+font-family: inherit;
+font-size: 10px;
+font-weight: 300;
+letter-spacing: 1px;
 cursor: pointer;
 display: flex;
 flex-direction: column;
 align-items: center;
-gap: 4px;
+gap: 6px;
 transition: all 0.15s;
 }
-.action-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.8; }
-.action-btn.active { background: var(–red); border-color: var(–red); }
-.action-btn span { font-size: 10px; }
+.action-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+.action-btn.active {
+background: var(–accent-lt);
+border-color: var(–accent);
+color: var(–accent);
+}
+.action-btn span { font-size: 9px; letter-spacing: 1.5px; }
 
 /* Info overlay */
 #info-box {
 position: absolute;
-top: 12px;
-left: 12px;
-background: rgba(0,0,0,0.75);
-border: 1px solid #333;
-border-radius: 8px;
+top: 14px;
+left: 14px;
+background: rgba(255,255,255,0.92);
+border: 1px solid var(–border);
+border-radius: 2px;
 padding: 10px 14px;
-font-size: 12px;
+font-size: 11px;
 display: none;
 pointer-events: none;
-backdrop-filter: blur(8px);
+backdrop-filter: blur(12px);
 }
 #info-box.visible { display: block; }
-#info-box .info-label { color: #888; font-size: 10px; letter-spacing: 1px; }
-#info-box .info-val { color: var(–accent); font-family: ‘Bebas Neue’, sans-serif; font-size: 18px; }
+#info-box .info-label {
+color: var(–muted);
+font-size: 9px;
+letter-spacing: 2px;
+text-transform: uppercase;
+font-weight: 400;
+}
+#info-box .info-val {
+color: var(–accent);
+font-size: 16px;
+font-weight: 300;
+letter-spacing: 2px;
+margin-top: 2px;
+}
 
 /* Detect hint */
 #detect-hint {
 position: absolute;
-bottom: 12px;
+bottom: 14px;
 left: 50%;
 transform: translateX(-50%);
-background: rgba(232,184,75,0.15);
+background: rgba(255,255,255,0.9);
 border: 1px solid var(–accent);
 color: var(–accent);
-padding: 6px 14px;
-border-radius: 20px;
-font-size: 11px;
+padding: 6px 16px;
+border-radius: 2px;
+font-size: 10px;
+font-weight: 300;
+letter-spacing: 2px;
 pointer-events: none;
 opacity: 0;
 transition: opacity 0.4s;
@@ -300,14 +346,15 @@ display: none;
 align-items: center;
 justify-content: center;
 flex-direction: column;
-gap: 12px;
+gap: 16px;
 text-align: center;
-padding: 24px;
+padding: 40px;
 z-index: 60;
+background: var(–bg);
 }
 #perm-error.show { display: flex; }
-#perm-error p { color: #888; font-size: 14px; line-height: 1.8; }
-#perm-error strong { color: var(–red); font-size: 16px; }
+#perm-error p { color: var(–muted); font-size: 13px; line-height: 2; font-weight: 300; }
+#perm-error strong { color: var(–navy); font-size: 14px; font-weight: 500; letter-spacing: 1px; }
 </style>
 
 </head>
@@ -326,56 +373,63 @@ z-index: 60;
 
   <div id="tv-overlay">
     <svg id="tv-svg" viewBox="0 0 160 100" xmlns="http://www.w3.org/2000/svg">
-      <!-- Frame -->
-      <rect x="0" y="0" width="160" height="95" rx="4" ry="4" fill="#1a1a1a" stroke="#444" stroke-width="1"/>
-      <!-- Screen -->
-      <rect x="4" y="4" width="152" height="83" rx="2" ry="2" fill="#0a0a0a"/>
-      <!-- Screen reflection -->
-      <rect x="4" y="4" width="152" height="20" rx="2" ry="2" fill="rgba(255,255,255,0.04)"/>
-      <!-- Logo dot -->
-      <circle cx="80" cy="91" r="2" fill="#555"/>
-      <!-- Stand hint line -->
-      <line x1="70" y1="95" x2="90" y2="95" stroke="#333" stroke-width="1.5"/>
-      <!-- Screen content sim -->
-      <rect x="12" y="12" width="136" height="67" rx="1" fill="url(#screenGrad)" opacity="0.7"/>
+      <rect x="0" y="0" width="160" height="95" rx="2" ry="2" fill="#1c1c1e" stroke="#383838" stroke-width="0.5"/>
+      <rect x="3" y="3" width="154" height="85" rx="1" ry="1" fill="#080808"/>
+      <rect x="3" y="3" width="154" height="16" rx="1" ry="1" fill="rgba(255,255,255,0.03)"/>
+      <circle cx="80" cy="91" r="1.5" fill="#444"/>
+      <line x1="72" y1="95" x2="88" y2="95" stroke="#2a2a2a" stroke-width="1"/>
+      <rect x="10" y="10" width="140" height="69" fill="url(#sg)" opacity="0.8"/>
       <defs>
-        <linearGradient id="screenGrad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#1a2a3a"/>
-          <stop offset="100%" stop-color="#0a0a14"/>
+        <linearGradient id="sg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#1a2535"/>
+          <stop offset="100%" stop-color="#080c14"/>
         </linearGradient>
       </defs>
-      <!-- Subtle scanlines -->
-      <line x1="12" y1="30" x2="148" y2="30" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
-      <line x1="12" y1="50" x2="148" y2="50" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
-      <line x1="12" y1="70" x2="148" y2="70" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
     </svg>
     <div id="tv-size-badge">55型</div>
     <div class="resize-handle" id="resize-handle">
-      <svg viewBox="0 0 14 14"><path d="M2 12L12 2M7 12L12 7M12 12V7H7"/></svg>
+      <svg viewBox="0 0 12 12" fill="none"><path d="M1 11L11 1M6 11L11 6M11 11V6H6" stroke="#fff" stroke-width="1.2"/></svg>
     </div>
   </div>
 
   <!-- Info box -->
 
   <div id="info-box">
-    <div class="info-label">SELECTED SIZE</div>
+    <div class="info-label">SIZE</div>
     <div class="info-val" id="info-size">55型</div>
-    <div class="info-label" style="margin-top:4px">WIDTH × HEIGHT</div>
+    <div class="info-label" style="margin-top:6px">W × H</div>
     <div class="info-val" id="info-dims">1227 × 708 mm</div>
   </div>
 
   <!-- Detect hint -->
 
-  <div id="detect-hint">壁面を検出しています...</div>
+  <div id="detect-hint">壁面を検出しています</div>
 
   <!-- Start screen -->
 
   <div id="start-screen">
+    <div class="start-logo">CRAFT-MIND</div>
     <div class="start-icon">
-      <svg viewBox="0 0 44 44"><rect x="2" y="6" width="40" height="26" rx="3"/><line x1="14" y1="32" x2="22" y2="36"/><line x1="30" y1="32" x2="22" y2="36"/><line x1="10" y1="36" x2="34" y2="36"/></svg>
+      <!-- レトロTV風アイコン -->
+      <svg viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- アンテナ左 -->
+        <line x1="46" y1="18" x2="36" y2="4" stroke="#2c5282" stroke-width="2.5" stroke-linecap="round"/>
+        <!-- アンテナ右 -->
+        <line x1="74" y1="18" x2="84" y2="4" stroke="#2c5282" stroke-width="2.5" stroke-linecap="round"/>
+        <!-- 本体 -->
+        <rect x="14" y="18" width="92" height="62" rx="8" fill="white" stroke="#2c5282" stroke-width="2.5"/>
+        <!-- 画面枠 -->
+        <rect x="22" y="25" width="76" height="48" rx="4" fill="#dce8f5" stroke="#4a7ab5" stroke-width="1.5"/>
+        <!-- 脚左 -->
+        <line x1="40" y1="80" x2="36" y2="93" stroke="#2c5282" stroke-width="2.5" stroke-linecap="round"/>
+        <!-- 脚右 -->
+        <line x1="80" y1="80" x2="84" y2="93" stroke="#2c5282" stroke-width="2.5" stroke-linecap="round"/>
+        <!-- 台 -->
+        <line x1="30" y1="93" x2="90" y2="93" stroke="#2c5282" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>
     </div>
     <div class="start-title">壁掛けテレビ<br>シミュレーター</div>
-    <div class="start-sub">カメラを壁に向けて<br>テレビのサイズ感を確認できます<br><br>カメラへのアクセスが必要です</div>
+    <div class="start-sub">カメラを壁に向けて、<br>テレビのサイズ感を確認できます</div>
     <button id="start-btn">カメラを起動する</button>
   </div>
 
@@ -388,13 +442,15 @@ z-index: 60;
 </div>
 
 <div id="bottom-panel">
-  <div class="panel-label">テレビサイズを選択</div>
+  <div class="panel-label">テレビサイズ</div>
   <div class="size-grid" id="size-grid">
     <button class="size-btn" data-size="32"><span>32</span><span class="inch">型</span></button>
     <button class="size-btn" data-size="43"><span>43</span><span class="inch">型</span></button>
     <button class="size-btn active" data-size="55"><span>55</span><span class="inch">型</span></button>
     <button class="size-btn" data-size="65"><span>65</span><span class="inch">型</span></button>
     <button class="size-btn" data-size="75"><span>75</span><span class="inch">型</span></button>
+    <button class="size-btn" data-size="85"><span>85</span><span class="inch">型</span></button>
+    <button class="size-btn" data-size="100"><span>100</span><span class="inch">型</span></button>
   </div>
   <div class="action-row">
     <button class="action-btn" id="detect-btn">
@@ -417,11 +473,13 @@ z-index: 60;
 <script>
 // ── TV SIZE DATA ──
 const TV_SIZES = {
-  32: { w: 730, h: 429 },
-  43: { w: 960, h: 544 },
-  55: { w: 1227, h: 708 },
-  65: { w: 1449, h: 837 },
-  75: { w: 1676, h: 970 },
+  32:  { w: 730,  h: 429  },
+  43:  { w: 960,  h: 544  },
+  55:  { w: 1227, h: 708  },
+  65:  { w: 1449, h: 837  },
+  75:  { w: 1676, h: 970  },
+  85:  { w: 1895, h: 1066 },
+  100: { w: 2214, h: 1245 },
 };
 
 let currentSize = 55;
@@ -737,12 +795,23 @@ document.getElementById('snap-btn').addEventListener('click', () => {
       ctx.fillStyle = 'rgba(232,184,75,0.7)';
       ctx.font = '12px Bebas Neue, sans-serif';
       ctx.fillText('CRAFT-MIND', 12, H - 12);
-      // Download
-      const link = document.createElement('a');
-      link.download = 'tv-simulation.png';
-      link.href = snapCanvas.toDataURL('image/png');
-      link.click();
       URL.revokeObjectURL(url);
+      // iOS対応: Web Share API → なければ通常DL
+      snapCanvas.toBlob(async (blob) => {
+        const file = new File([blob], 'tv-simulation.png', { type: 'image/png' });
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], title: '壁掛けテレビシミュレーション' });
+          } catch(e) { /* キャンセル等 */ }
+        } else {
+          // フォールバック: 通常ダウンロード
+          const link = document.createElement('a');
+          link.download = 'tv-simulation.png';
+          link.href = URL.createObjectURL(blob);
+          link.click();
+          setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+        }
+      }, 'image/png');
     };
     tvImg.src = url;
   }
