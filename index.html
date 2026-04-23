@@ -165,7 +165,7 @@ document.querySelectorAll('.size-btn').forEach(btn => {
     const w = btn.dataset.w;
     const h = btn.dataset.h;
     infoEl.innerHTML = `<span>${selectedSize}型</span>　${w} × ${h} mm`;
-    arBtn.href = `${USDZ_BASE}/tv_${selectedSize}inch.usdz`;
+    arBtn.href = `${USDZ_BASE}/tv_${selectedSize}inch.usdz#allowsContentScaling=0`;
   });
 });
 
