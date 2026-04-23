@@ -286,6 +286,11 @@
   }
   .action-btn span { font-size: 9px; letter-spacing: 1.5px; }
 
+  /* AR anchor button */
+  a.action-btn {
+    text-decoration: none;
+  }
+
   /* Info overlay */
   #info-box {
     position: absolute;
@@ -446,10 +451,10 @@
     <button class="size-btn" data-size="100"><span>100</span><span class="inch">型</span></button>
   </div>
   <div class="action-row">
-    <button class="action-btn" id="ar-btn">
+    <a id="ar-btn" class="action-btn" rel="ar" href="https://m-aoki-ship-it.github.io/kabekake_simulatar/usdz/tv_55inch.usdz">
       <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
       <span>ARで確認</span>
-    </button>
+    </a>
     <button class="action-btn" id="detect-btn">
       <svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 012-2h2M3 17v2a2 2 0 002 2h2M17 3h2a2 2 0 012 2v2M17 21h2a2 2 0 002-2v-2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>
       <span>壁面検出</span>
@@ -466,10 +471,6 @@
 </div>
 
 <canvas id="snap-canvas" style="display:none"></canvas>
-<!-- AR QuickLook用の隠しリンク（iOS Safari専用） -->
-<a id="ar-link" rel="ar" href="" style="display:none">
-  <img src="">
-</a>
 
 <script>
 // ── GITHUB PAGES BASE URL ──
@@ -581,6 +582,11 @@ function updateInfo() {
   infoSize.textContent = currentSize + '型';
   infoDims.textContent = d.w + ' × ' + d.h + ' mm';
   tvSizeBadge.textContent = currentSize + '型';
+  // ARリンクのhrefをサイズに合わせて更新
+  const arBtn = document.getElementById('ar-btn');
+  if (arBtn) {
+    arBtn.href = `${USDZ_BASE}/tv_${currentSize}inch.usdz`;
+  }
 }
 
 // ── DRAG (touch & mouse) ──
@@ -752,19 +758,6 @@ function runDetection() {
 
   if (detectActive) requestAnimationFrame(runDetection);
 }
-
-// ── AR QUICKLOOK ──
-document.getElementById('ar-btn').addEventListener('click', () => {
-  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-  if (!isIOS) {
-    alert('AR機能はiOS（iPhone/iPad）のSafariでご利用いただけます。');
-    return;
-  }
-  const url = `${USDZ_BASE}/tv_${currentSize}inch.usdz`;
-  const link = document.getElementById('ar-link');
-  link.href = url;
-  link.click();
-});
 
 // ── CAMERA FLIP ──
 document.getElementById('flip-btn').addEventListener('click', async () => {
