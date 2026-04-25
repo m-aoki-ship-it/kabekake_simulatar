@@ -1,185 +1,171 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>壁掛けテレビ ARシミュレーター | Craft-Mind</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@300;400;500;700&display=swap');
+//  ARWallMeasurementView.swift
+//  壁掛けテレビARシミュレーター
+//
+//  【重要】実際のプロジェクトに組み込む際は、
+//  Info.plist に NSCameraUsageDescription の記載が必要です。
 
-  :root {
-    --bg:      #f2f5f8;
-    --surface: #ffffff;
-    --navy:    #2c3e50;
-    --slate:   #4a6280;
-    --accent:  #2c5282;
-    --sky:     #29abe2;
-    --muted:   #8a9ab0;
-    --border:  #dde3ea;
-  }
+import SwiftUI
+import ARKit
+import RealityKit
+import Combine
 
-  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+// MARK: - メインのARビュー（SwiftUIから呼び出す）
+struct ARWallMeasurementView: UIViewRepresentable {
+    @ObservedObject var coordinator: ARCoordinator
+    
+    func makeUIView(context: Context) -> ARView {
+        let arView = ARView(frame: .zero)
+        
+        // LiDAR非搭載機でも動くようにワールドトラッキングを選択
+        let config = ARWorldTrackingConfiguration()
+        config.planeDetection = [.vertical]  // 壁だけを検出
+        
+        arView.session.run(config)
+        arView.session.delegate = context.coordinator
+        
+        // タップジェスチャーを追加
+        let tapGesture = UITapGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(ARCoordinator.handleTap(_:))
+        )
+        arView.addGestureRecognizer(tapGesture)
+        
+        context.coordinator.arView = arView
+        return arView
+    }
+    
+    func updateUIView(_ uiView: ARView, context: Context) {}
+    
+    func makeCoordinator() -> ARCoordinator {
+        return coordinator
+    }
+}
 
-  body {
-    background: var(--bg);
-    color: var(--navy);
-    font-family: 'M PLUS Rounded 1c', 'Hiragino Maru Gothic Pro', sans-serif;
-    min-height: 100dvh;
-    display: flex;
-    flex-direction: column;
-  }
+// MARK: - ARの状態とロジックを管理するコーディネーター
+class ARCoordinator: NSObject, ObservableObject, ARSessionDelegate {
+    weak var arView: ARView!
+    
+    @Published var leftPoint: CGPoint?  // 左端のタップ座標
+    @Published var rightPoint: CGPoint? // 右端のタップ座標
+    @Published var measuredWidth: Float = 0.0  // 実寸幅（メートル）
+    @Published var statusMessage = "壁の左端をタップしてください"
+    
+    private var tvAnchor: AnchorEntity?
+    
+    @objc func handleTap(_ sender: UITapGestureRecognizer) {
+        let location = sender.location(in: arView)
+        
+        // ********** ここが今回のキモ **********
+        // ARKit のレイキャストで、検出済みの「壁平面」との正確な交点を取得
+        let results = arView.raycast(from: location, 
+                                     allowing: .estimatedPlane, 
+                                     alignment: .vertical)
+        
+        guard let firstResult = results.first else {
+            statusMessage = "壁を認識できません。もう少しゆっくりスマホを動かしてください"
+            return
+        }
+        // ************************************
+        
+        if leftPoint == nil {
+            // 1回目: 左端として記録
+            leftPoint = location
+            statusMessage = "壁の右端をタップしてください"
+            
+            // タップ位置に小さな目印を表示（オプション）
+            placeMarker(at: firstResult, color: .green)
+            
+        } else if rightPoint == nil {
+            // 2回目: 右端として記録し、計測開始
+            rightPoint = location
+            placeMarker(at: firstResult, color: .green)
+            
+            // 右端の3D空間上の座標も取得
+            if let leftResult = arView.raycast(from: leftPoint!, 
+                                               allowing: .estimatedPlane, 
+                                               alignment: .vertical).first {
+                // 2点間のユークリッド距離を計算 → これがテレビの「幅」になる
+                let distance = simd_distance(leftResult.worldTransform.translation,
+                                             firstResult.worldTransform.translation)
+                measuredWidth = distance
+                statusMessage = String(format: "幅: %.1f cm (タップで再測定)", distance * 100)
+                
+                // テレビの3Dモデルを正しいサイズで配置
+                placeTVModel(left: leftResult, right: firstResult)
+            }
+            
+        } else {
+            // 再測定: すべてリセット
+            resetMeasurement()
+        }
+    }
+    
+    // 計測結果をリセット
+    func resetMeasurement() {
+        leftPoint = nil
+        rightPoint = nil
+        tvAnchor?.removeFromParent()
+        tvAnchor = nil
+        measuredWidth = 0.0
+        statusMessage = "壁の左端をタップしてください"
+    }
+    
+    // タップ位置に目印を表示
+    private func placeMarker(at result: ARRaycastResult, color: UIColor) {
+        let sphere = MeshResource.generateSphere(radius: 0.01)
+        let material = SimpleMaterial(color: color, isMetallic: false)
+        let entity = ModelEntity(mesh: sphere, materials: [material])
+        
+        let anchor = AnchorEntity(world: result.worldTransform)
+        anchor.addChild(entity)
+        arView.scene.addAnchor(anchor)
+    }
+    
+    // テレビの3Dモデルを正確なサイズで表示
+    private func placeTVModel(left: ARRaycastResult, right: ARRaycastResult) {
+        // 古いモデルがあれば削除
+        tvAnchor?.removeFromParent()
+        
+        let width = simd_distance(left.worldTransform.translation,
+                                  right.worldTransform.translation)
+        
+        // テレビの簡易3Dモデルを作成（薄い直方体）
+        // 実際のアプリでは、USDZファイルを読み込むことを推奨
+        let tvThickness: Float = 0.05  // 5cmの厚み
+        let tvHeight = width * 9.0 / 16.0  // 16:9のアスペクト比
+        
+        let tvMesh = MeshResource.generateBox(
+            width: width, 
+            height: tvHeight, 
+            depth: tvThickness
+        )
+        
+        // 真っ黒なテレビ画面のマテリアル
+        var tvMaterial = PhysicallyBasedMaterial()
+        tvMaterial.baseColor = .init(tint: .black)
+        tvMaterial.roughness = 0.1
+        tvMaterial.metallic = 0.0
+        
+        let tvEntity = ModelEntity(mesh: tvMesh, materials: [SimpleMaterial()])
+        
+        // 2点の中間に配置
+        let midX = (left.worldTransform.translation.x + right.worldTransform.translation.x) / 2
+        let midY = (left.worldTransform.translation.y + right.worldTransform.translation.y) / 2 + tvHeight / 2
+        let midZ = (left.worldTransform.translation.z + right.worldTransform.translation.z) / 2
+        
+        var transform = Transform()
+        transform.translation = SIMD3(midX, midY, midZ)
+        tvEntity.transform = transform
+        
+        tvAnchor = AnchorEntity()
+        tvAnchor!.addChild(tvEntity)
+        arView.scene.addAnchor(tvAnchor!)
+    }
+}
 
-  header {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 14px 20px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .logo { font-size: 13px; font-weight: 500; letter-spacing: 4px; color: var(--navy); }
-  .logo span { color: var(--accent); }
-  .header-sub { font-size: 9px; color: var(--muted); letter-spacing: 2px; }
-
-  main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 40px 24px 32px;
-    gap: 36px;
-  }
-
-  .tv-illustration { width: 140px; height: 116px; }
-
-  .title-block { text-align: center; }
-  .title-block h1 { font-size: 26px; font-weight: 700; line-height: 1.5; letter-spacing: 2px; }
-  .title-block p { margin-top: 10px; font-size: 13px; font-weight: 400; color: var(--slate); line-height: 2; }
-
-  .size-section { width: 100%; max-width: 360px; }
-  .size-label { font-size: 10px; font-weight: 500; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; margin-bottom: 12px; text-align: center; }
-
-  .size-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 8px; }
-  .size-grid-bottom { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
-
-  .size-btn {
-    background: var(--surface);
-    border: 1.5px solid var(--border);
-    border-radius: 10px;
-    padding: 12px 4px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.15s;
-    font-family: inherit;
-  }
-  .size-btn .num { display: block; font-size: 20px; font-weight: 500; color: var(--slate); line-height: 1; }
-  .size-btn .unit { display: block; font-size: 10px; font-weight: 300; color: var(--muted); margin-top: 3px; }
-  .size-btn.active { background: var(--accent); border-color: var(--accent); box-shadow: 0 4px 12px rgba(44,82,130,0.25); }
-  .size-btn.active .num { color: #fff; }
-  .size-btn.active .unit { color: rgba(255,255,255,0.7); }
-
-  .selected-info { text-align: center; font-size: 12px; color: var(--muted); font-weight: 300; letter-spacing: 1px; min-height: 20px; transition: color 0.2s; }
-  .selected-info span { color: var(--accent); font-weight: 500; }
-
-  .ar-btn-wrap { width: 100%; max-width: 360px; }
-  a.ar-launch {
-    display: flex; align-items: center; justify-content: center; gap: 10px;
-    width: 100%; background: var(--sky); color: #fff; text-decoration: none;
-    padding: 18px; border-radius: 12px; font-family: inherit; font-size: 16px;
-    font-weight: 700; letter-spacing: 2px;
-    box-shadow: 0 6px 20px rgba(41,171,226,0.35);
-    transition: opacity 0.15s, transform 0.1s;
-  }
-  a.ar-launch:active { opacity: 0.85; transform: scale(0.98); }
-  a.ar-launch svg { width: 22px; height: 22px; stroke: #fff; fill: none; stroke-width: 2; flex-shrink: 0; }
-
-  .ar-note { text-align: center; font-size: 11px; color: var(--muted); margin-top: 10px; font-weight: 300; line-height: 1.8; }
-
-  footer { text-align: center; padding: 16px; font-size: 10px; color: var(--muted); letter-spacing: 1px; }
-</style>
-</head>
-<body>
-
-<header>
-  <div class="logo">CRAFT<span>-MIND</span></div>
-  <div class="header-sub">TV AR SIMULATOR</div>
-</header>
-
-<main>
-  <svg class="tv-illustration" viewBox="0 0 140 116" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <line x1="52" y1="22" x2="40" y2="4" stroke="#2c5282" stroke-width="3" stroke-linecap="round"/>
-    <line x1="88" y1="22" x2="100" y2="4" stroke="#2c5282" stroke-width="3" stroke-linecap="round"/>
-    <rect x="14" y="22" width="112" height="72" rx="10" fill="white" stroke="#2c5282" stroke-width="2.5"/>
-    <rect x="24" y="31" width="92" height="54" rx="5" fill="#dce8f5" stroke="#4a7ab5" stroke-width="1.5"/>
-    <rect x="24" y="31" width="92" height="16" rx="5" fill="rgba(255,255,255,0.5)"/>
-    <circle cx="70" cy="101" r="3" fill="#c8d8e8"/>
-    <line x1="46" y1="94" x2="40" y2="110" stroke="#2c5282" stroke-width="2.5" stroke-linecap="round"/>
-    <line x1="94" y1="94" x2="100" y2="110" stroke="#2c5282" stroke-width="2.5" stroke-linecap="round"/>
-    <line x1="32" y1="110" x2="108" y2="110" stroke="#2c5282" stroke-width="2.5" stroke-linecap="round"/>
-  </svg>
-
-  <div class="title-block">
-    <h1>壁掛けテレビ<br>ARシミュレーター</h1>
-    <p>サイズを選んでARボタンをタップ<br>実寸で壁に映し出せます</p>
-  </div>
-
-  <div class="size-section">
-    <div class="size-label">テレビサイズを選択</div>
-    <div class="size-grid">
-      <button class="size-btn" data-size="32" data-w="730" data-h="429"><span class="num">32</span><span class="unit">型</span></button>
-      <button class="size-btn" data-size="43" data-w="960" data-h="544"><span class="num">43</span><span class="unit">型</span></button>
-      <button class="size-btn" data-size="55" data-w="1227" data-h="708"><span class="num">55</span><span class="unit">型</span></button>
-      <button class="size-btn" data-size="65" data-w="1449" data-h="837"><span class="num">65</span><span class="unit">型</span></button>
-    </div>
-    <div class="size-grid-bottom">
-      <button class="size-btn" data-size="75" data-w="1676" data-h="970"><span class="num">75</span><span class="unit">型</span></button>
-      <button class="size-btn" data-size="85" data-w="1895" data-h="1066"><span class="num">85</span><span class="unit">型</span></button>
-      <button class="size-btn" data-size="100" data-w="2214" data-h="1245"><span class="num">100</span><span class="unit">型</span></button>
-    </div>
-    <div class="selected-info" id="selected-info">サイズを選択してください</div>
-  </div>
-
-  <div class="ar-btn-wrap">
-    <a id="ar-btn" class="ar-launch" rel="ar" href="#">
-      <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-      ARで確認する
-    </a>
-    <div class="ar-note">iPhone / iPad の Safari でご利用ください</div>
-  </div>
-</main>
-
-<footer>© CRAFT-MIND</footer>
-
-<script>
-const USDZ_BASE = 'https://m-aoki-ship-it.github.io/kabekake_simulatar';
-let selectedSize = null;
-
-const arBtn = document.getElementById('ar-btn');
-const infoEl = document.getElementById('selected-info');
-
-document.querySelectorAll('.size-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    selectedSize = btn.dataset.size;
-    const w = btn.dataset.w;
-    const h = btn.dataset.h;
-    infoEl.innerHTML = `<span>${selectedSize}型</span>　${w} × ${h} mm`;
-    arBtn.href = `${USDZ_BASE}/tv_${selectedSize}inch.usdz#allowsContentScaling=0`;
-  });
-});
-
-arBtn.addEventListener('click', e => {
-  if (!selectedSize) {
-    e.preventDefault();
-    infoEl.style.color = '#e63946';
-    infoEl.textContent = '先にサイズを選択してください';
-    setTimeout(() => {
-      infoEl.style.color = '';
-      infoEl.textContent = 'サイズを選択してください';
-    }, 2000);
-  }
-});
-</script>
-</body>
-</html>
+// MARK: - 座標変換のための拡張
+extension simd_float4x4 {
+    var translation: SIMD3<Float> {
+        return SIMD3(columns.3.x, columns.3.y, columns.3.z)
+    }
+}
