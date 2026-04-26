@@ -1,171 +1,308 @@
-//  ARWallMeasurementView.swift
-//  壁掛けテレビARシミュレーター
-//
-//  【重要】実際のプロジェクトに組み込む際は、
-//  Info.plist に NSCameraUsageDescription の記載が必要です。
-
-import SwiftUI
-import ARKit
-import RealityKit
-import Combine
-
-// MARK: - メインのARビュー（SwiftUIから呼び出す）
-struct ARWallMeasurementView: UIViewRepresentable {
-    @ObservedObject var coordinator: ARCoordinator
-    
-    func makeUIView(context: Context) -> ARView {
-        let arView = ARView(frame: .zero)
-        
-        // LiDAR非搭載機でも動くようにワールドトラッキングを選択
-        let config = ARWorldTrackingConfiguration()
-        config.planeDetection = [.vertical]  // 壁だけを検出
-        
-        arView.session.run(config)
-        arView.session.delegate = context.coordinator
-        
-        // タップジェスチャーを追加
-        let tapGesture = UITapGestureRecognizer(
-            target: context.coordinator,
-            action: #selector(ARCoordinator.handleTap(_:))
-        )
-        arView.addGestureRecognizer(tapGesture)
-        
-        context.coordinator.arView = arView
-        return arView
-    }
-    
-    func updateUIView(_ uiView: ARView, context: Context) {}
-    
-    func makeCoordinator() -> ARCoordinator {
-        return coordinator
-    }
-}
-
-// MARK: - ARの状態とロジックを管理するコーディネーター
-class ARCoordinator: NSObject, ObservableObject, ARSessionDelegate {
-    weak var arView: ARView!
-    
-    @Published var leftPoint: CGPoint?  // 左端のタップ座標
-    @Published var rightPoint: CGPoint? // 右端のタップ座標
-    @Published var measuredWidth: Float = 0.0  // 実寸幅（メートル）
-    @Published var statusMessage = "壁の左端をタップしてください"
-    
-    private var tvAnchor: AnchorEntity?
-    
-    @objc func handleTap(_ sender: UITapGestureRecognizer) {
-        let location = sender.location(in: arView)
-        
-        // ********** ここが今回のキモ **********
-        // ARKit のレイキャストで、検出済みの「壁平面」との正確な交点を取得
-        let results = arView.raycast(from: location, 
-                                     allowing: .estimatedPlane, 
-                                     alignment: .vertical)
-        
-        guard let firstResult = results.first else {
-            statusMessage = "壁を認識できません。もう少しゆっくりスマホを動かしてください"
-            return
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>壁掛けテレビ AR シミュレーター｜プロ施工業者向け</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Arial', sans-serif; }
+        #ui {
+            position: absolute;
+            top: 20px; left: 20px; right: 20px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            pointer-events: none;
         }
-        // ************************************
+        #statusBox {
+            background: rgba(0,0,0,0.75);
+            color: #fff;
+            padding: 14px 18px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
+            text-align: center;
+            pointer-events: none;
+        }
+        .btn {
+            pointer-events: auto;
+            padding: 16px 24px;
+            border: none;
+            border-radius: 40px;
+            font-size: 16px;
+            font-weight: bold;
+            background: rgba(255,255,255,0.9);
+            backdrop-filter: blur(10px);
+            color: #000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            text-align: center;
+            transition: 0.2s;
+        }
+        .btn:active { background: #ffcc00; transform: scale(0.96); }
+        #plateSelect {
+            pointer-events: auto;
+            padding: 12px 16px;
+            border-radius: 30px;
+            border: none;
+            font-size: 15px;
+            background: rgba(255,255,255,0.9);
+            backdrop-filter: blur(10px);
+            font-weight: bold;
+            text-align: center;
+        }
+    </style>
+    <!-- Three.js & WebXR Polyfill (CDN) -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.150.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.150.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="ui">
+        <div id="statusBox">壁の左端をタップしてください</div>
+        <div style="display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap;">
+            <button id="calibrateBtn" class="btn">📐 コンセントで補正</button>
+            <select id="plateSelect">
+                <option value="0.072">1連 (7.2cm)</option>
+                <option value="0.120" selected>2連 (12.0cm)</option>
+            </select>
+            <button id="resetBtn" class="btn">↺ リセット</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { ARButton } from 'three/addons/webxr/ARButton.js';
+
+        // =====================
+        //  DOM 要素
+        // =====================
+        const statusBox = document.getElementById('statusBox');
+        const calibrateBtn = document.getElementById('calibrateBtn');
+        const plateSelect = document.getElementById('plateSelect');
+        const resetBtn = document.getElementById('resetBtn');
+
+        // =====================
+        //  Three.js 初期化
+        // =====================
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 20);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.xr.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // ARボタン（iOS Safariでは必須）
+        document.body.appendChild(
+            ARButton.createButton(renderer, { requiredFeatures: ['local-floor', 'hit-test'] })
+        );
+
+        // 照明
+        const ambientLight = new THREE.AmbientLight(0xcccccc, 1.2);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(0, 1, 1);
+        scene.add(directionalLight);
+
+        // =====================
+        //  変数
+        // =====================
+        let xrSession = null;
+        let hitTestSource = null;
+        let localReferenceSpace = null;
         
-        if leftPoint == nil {
-            // 1回目: 左端として記録
-            leftPoint = location
-            statusMessage = "壁の右端をタップしてください"
+        let firstPoint = null;      // テレビ左端ワールド座標
+        let secondPoint = null;     // テレビ右端ワールド座標
+        let tvModel = null;
+        
+        // キャリブレーション
+        let scaleCorrectionFactor = 1.0;   // 1.0 = 補正なし
+        let isCalibrationMode = false;
+        let calibFirstPoint = null;
+        let calibSecondPoint = null;
+        
+        // マーカー配列（後で消すため）
+        const markers = [];
+
+        // =====================
+        //  WebXR セッション管理
+        // =====================
+        renderer.xr.addEventListener('sessionstart', async (event) => {
+            xrSession = event.session;
+            localReferenceSpace = await xrSession.requestReferenceSpace('local-floor');
+            hitTestSource = await xrSession.requestHitTestSource({ space: localReferenceSpace });
             
-            // タップ位置に小さな目印を表示（オプション）
-            placeMarker(at: firstResult, color: .green)
+            xrSession.addEventListener('select', onSelect);
+            xrSession.addEventListener('end', () => {
+                xrSession = null;
+                hitTestSource = null;
+                localReferenceSpace = null;
+                resetMeasurement();
+            });
+        });
+
+        // =====================
+        //  距離計算
+        // =====================
+        function distance(p1, p2) {
+            const dx = p1.x - p2.x;
+            const dy = p1.y - p2.y;
+            const dz = p1.z - p2.z;
+            return Math.sqrt(dx*dx + dy*dy + dz*dz);
+        }
+
+        // =====================
+        //  マーカー表示
+        // =====================
+        function placeMarker(pos, color) {
+            const geometry = new THREE.SphereGeometry(0.008, 16, 16);
+            const material = new THREE.MeshStandardMaterial({ color });
+            const sphere = new THREE.Mesh(geometry, material);
+            sphere.position.set(pos.x, pos.y, pos.z);
+            scene.add(sphere);
+            markers.push(sphere);
+        }
+
+        function clearMarkers() {
+            markers.forEach(m => scene.remove(m));
+            markers.length = 0;
+        }
+
+        // =====================
+        //  テレビモデル配置（補正後）
+        // =====================
+        function placeTVModelCorrected(pos1, pos2, correctedWidth) {
+            if (tvModel) scene.remove(tvModel);
             
-        } else if rightPoint == nil {
-            // 2回目: 右端として記録し、計測開始
-            rightPoint = location
-            placeMarker(at: firstResult, color: .green)
+            const height = correctedWidth * 9 / 16;  // 16:9
+            const geometry = new THREE.BoxGeometry(correctedWidth, height, 0.04);
+            const material = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.15, metalness: 0.1 });
+            tvModel = new THREE.Mesh(geometry, material);
             
-            // 右端の3D空間上の座標も取得
-            if let leftResult = arView.raycast(from: leftPoint!, 
-                                               allowing: .estimatedPlane, 
-                                               alignment: .vertical).first {
-                // 2点間のユークリッド距離を計算 → これがテレビの「幅」になる
-                let distance = simd_distance(leftResult.worldTransform.translation,
-                                             firstResult.worldTransform.translation)
-                measuredWidth = distance
-                statusMessage = String(format: "幅: %.1f cm (タップで再測定)", distance * 100)
-                
-                // テレビの3Dモデルを正しいサイズで配置
-                placeTVModel(left: leftResult, right: firstResult)
+            // 中点を計算し、補正係数を掛ける（座標もスケール補正）
+            const midX = ((pos1.x + pos2.x) / 2) * scaleCorrectionFactor;
+            const midY = ((pos1.y + pos2.y) / 2) * scaleCorrectionFactor + height / 2;
+            const midZ = ((pos1.z + pos2.z) / 2) * scaleCorrectionFactor;
+            
+            tvModel.position.set(midX, midY, midZ);
+            scene.add(tvModel);
+        }
+
+        // =====================
+        //  リセット
+        // =====================
+        function resetMeasurement() {
+            firstPoint = null;
+            secondPoint = null;
+            if (tvModel) {
+                scene.remove(tvModel);
+                tvModel = null;
+            }
+            clearMarkers();
+            isCalibrationMode = false;
+            statusBox.innerText = '壁の左端をタップしてください';
+        }
+
+        // =====================
+        //  タップ処理（selectイベント）
+        // =====================
+        function onSelect(event) {
+            if (!xrSession || !hitTestSource) return;
+            
+            const frame = event.frame;
+            const hitResults = frame.getHitTestResults(hitTestSource);
+            if (hitResults.length === 0) {
+                statusBox.innerText = '⚠️ 壁が認識できません。ゆっくりカメラを動かして下さい';
+                return;
             }
             
-        } else {
-            // 再測定: すべてリセット
-            resetMeasurement()
+            const hit = hitResults[0];
+            const pose = hit.getPose(localReferenceSpace);
+            const pos = {
+                x: pose.transform.position.x,
+                y: pose.transform.position.y,
+                z: pose.transform.position.z
+            };
+            
+            // ----- キャリブレーションモード -----
+            if (isCalibrationMode) {
+                if (!calibFirstPoint) {
+                    calibFirstPoint = pos;
+                    placeMarker(pos, 0xffff00); // 黄色
+                    statusBox.innerText = '▶ コンセントの反対側（右端/下端）をタップ';
+                } else {
+                    calibSecondPoint = pos;
+                    placeMarker(pos, 0xffff00);
+                    
+                    const measuredWidth = distance(calibFirstPoint, calibSecondPoint);
+                    const knownWidth = parseFloat(plateSelect.value);
+                    scaleCorrectionFactor = knownWidth / measuredWidth;
+                    
+                    statusBox.innerText = `✅ 補正係数: ${scaleCorrectionFactor.toFixed(3)}（実寸 ${(knownWidth*100).toFixed(1)}cm）`;
+                    isCalibrationMode = false;
+                    calibFirstPoint = null;
+                    calibSecondPoint = null;
+                    clearMarkers();
+                }
+                return;
+            }
+            
+            // ----- 通常の設置モード -----
+            if (!firstPoint) {
+                firstPoint = pos;
+                placeMarker(pos, 0x00ff00);
+                statusBox.innerText = '壁の右端をタップしてください';
+            } else if (!secondPoint) {
+                secondPoint = pos;
+                placeMarker(pos, 0x00ff00);
+                
+                const rawWidth = distance(firstPoint, secondPoint);
+                const correctedWidth = rawWidth * scaleCorrectionFactor;
+                statusBox.innerText = `📺 テレビ幅: ${(correctedWidth * 100).toFixed(1)} cm（補正済） 再タップでリセット`;
+                
+                placeTVModelCorrected(firstPoint, secondPoint, correctedWidth);
+            } else {
+                resetMeasurement();
+            }
         }
-    }
-    
-    // 計測結果をリセット
-    func resetMeasurement() {
-        leftPoint = nil
-        rightPoint = nil
-        tvAnchor?.removeFromParent()
-        tvAnchor = nil
-        measuredWidth = 0.0
-        statusMessage = "壁の左端をタップしてください"
-    }
-    
-    // タップ位置に目印を表示
-    private func placeMarker(at result: ARRaycastResult, color: UIColor) {
-        let sphere = MeshResource.generateSphere(radius: 0.01)
-        let material = SimpleMaterial(color: color, isMetallic: false)
-        let entity = ModelEntity(mesh: sphere, materials: [material])
-        
-        let anchor = AnchorEntity(world: result.worldTransform)
-        anchor.addChild(entity)
-        arView.scene.addAnchor(anchor)
-    }
-    
-    // テレビの3Dモデルを正確なサイズで表示
-    private func placeTVModel(left: ARRaycastResult, right: ARRaycastResult) {
-        // 古いモデルがあれば削除
-        tvAnchor?.removeFromParent()
-        
-        let width = simd_distance(left.worldTransform.translation,
-                                  right.worldTransform.translation)
-        
-        // テレビの簡易3Dモデルを作成（薄い直方体）
-        // 実際のアプリでは、USDZファイルを読み込むことを推奨
-        let tvThickness: Float = 0.05  // 5cmの厚み
-        let tvHeight = width * 9.0 / 16.0  // 16:9のアスペクト比
-        
-        let tvMesh = MeshResource.generateBox(
-            width: width, 
-            height: tvHeight, 
-            depth: tvThickness
-        )
-        
-        // 真っ黒なテレビ画面のマテリアル
-        var tvMaterial = PhysicallyBasedMaterial()
-        tvMaterial.baseColor = .init(tint: .black)
-        tvMaterial.roughness = 0.1
-        tvMaterial.metallic = 0.0
-        
-        let tvEntity = ModelEntity(mesh: tvMesh, materials: [SimpleMaterial()])
-        
-        // 2点の中間に配置
-        let midX = (left.worldTransform.translation.x + right.worldTransform.translation.x) / 2
-        let midY = (left.worldTransform.translation.y + right.worldTransform.translation.y) / 2 + tvHeight / 2
-        let midZ = (left.worldTransform.translation.z + right.worldTransform.translation.z) / 2
-        
-        var transform = Transform()
-        transform.translation = SIMD3(midX, midY, midZ)
-        tvEntity.transform = transform
-        
-        tvAnchor = AnchorEntity()
-        tvAnchor!.addChild(tvEntity)
-        arView.scene.addAnchor(tvAnchor!)
-    }
-}
 
-// MARK: - 座標変換のための拡張
-extension simd_float4x4 {
-    var translation: SIMD3<Float> {
-        return SIMD3(columns.3.x, columns.3.y, columns.3.z)
-    }
-}
+        // =====================
+        //  ボタンイベント
+        // =====================
+        calibrateBtn.addEventListener('click', () => {
+            if (!xrSession) {
+                statusBox.innerText = '先にARセッションを開始してください';
+                return;
+            }
+            isCalibrationMode = true;
+            calibFirstPoint = null;
+            calibSecondPoint = null;
+            clearMarkers();
+            const plateWidth = parseFloat(plateSelect.value) * 100;
+            statusBox.innerText = `▶ コンセント (${plateWidth.toFixed(1)}cm) の端をタップ`;
+        });
+
+        resetBtn.addEventListener('click', resetMeasurement);
+
+        // レスポンシブ対応
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // =====================
+        //  アニメーションループ
+        // =====================
+        renderer.setAnimationLoop(() => {
+            renderer.render(scene, camera);
+        });
+    </script>
+</body>
+</html>
